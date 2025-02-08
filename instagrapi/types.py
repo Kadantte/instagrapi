@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from pydantic import (
     BaseModel,
@@ -7,32 +7,48 @@ from pydantic import (
     FilePath,
     HttpUrl,
     ValidationError,
-    validator,
+    field_validator,
 )
 
+class TypesBaseModel(BaseModel):
+    model_config = ConfigDict(
+        coerce_numbers_to_str=True
+    )  # (jarrodnorwell) fixed city_id issue
 
 def validate_external_url(cls, v):
     if v is None or (v.startswith("http") and "://" in v) or isinstance(v, str):
         return v
-    raise ValidationError("external_url must been URL or string")
+    raise ValidationError("external_url must be a URL or string")  # Corrected 'been' to 'be'
 
-
-class Resource(BaseModel):
-    model_config = ConfigDict(
-        coerce_numbers_to_str=True
-    )  # (jarrodnorwell) fixed pk issue
-
+class Resource(TypesBaseModel):
     pk: str
     video_url: Optional[HttpUrl] = None  # for Video and IGTV
     thumbnail_url: HttpUrl
     media_type: int
 
+class BioLink(TypesBaseModel):
+    link_id: str
+    url: str
+    lynx_url: Optional[str] = None
+    link_type: Optional[str] = None
+    title: Optional[str] = None
+    is_pinned: Optional[bool] = None
+    open_external_url_with_in_app_browser: Optional[bool] = None
 
-class User(BaseModel):
-    model_config = ConfigDict(
-        coerce_numbers_to_str=True
-    )  # (jarrodnorwell) fixed city_id issue
+class Broadcast(TypesBaseModel):
+    title: str
+    thread_igid: str
+    subtitle: str
+    invite_link: str
+    is_member: bool
+    group_image_uri: str
+    group_image_background_uri: str
+    thread_subtype: int
+    number_of_members: int
+    creator_igid: Optional[str] = None  # Changed from str | None to Optional[str]
+    creator_username: str
 
+class User(TypesBaseModel):
     pk: str
     username: str
     full_name: str
@@ -44,9 +60,12 @@ class User(BaseModel):
     follower_count: int
     following_count: int
     biography: Optional[str] = ""
+    bio_links: List[BioLink] = []
     external_url: Optional[str] = None
     account_type: Optional[int] = None
     is_business: bool
+
+    broadcast_channel: List[Broadcast] = []
 
     public_email: Optional[str] = None
     contact_phone_number: Optional[str] = None
@@ -66,10 +85,9 @@ class User(BaseModel):
     instagram_location_id: Optional[str] = None
     interop_messaging_user_fbid: Optional[str] = None
 
-    _external_url = validator("external_url", allow_reuse=True)(validate_external_url)
+    _external_url = field_validator("external_url")(validate_external_url)  # Updated to use field_validator
 
-
-class Account(BaseModel):
+class Account(TypesBaseModel):
     pk: str
     username: str
     full_name: str
@@ -84,13 +102,16 @@ class Account(BaseModel):
     gender: Optional[int] = None
     email: Optional[str] = None
 
-    _external_url = validator("external_url", allow_reuse=True)(validate_external_url)
+    _external_url = field_validator("external_url")(validate_external_url)  # Updated to use field_validator
 
+class UserShort(TypesBaseModel):
+    def __hash__(self):
+        return hash(self.pk)
 
-class UserShort(BaseModel):
-    model_config = ConfigDict(
-        coerce_numbers_to_str=True
-    )  # (jarrodnorwell) fixed pk issue
+    def __eq__(self, other):
+        if isinstance(other, UserShort):
+            return self.pk == other.pk
+        return NotImplemented
 
     pk: str
     username: Optional[str] = None
@@ -99,16 +120,16 @@ class UserShort(BaseModel):
     profile_pic_url_hd: Optional[HttpUrl] = None
     is_private: Optional[bool] = None
     # is_verified: bool  # not found in hashtag_medias_v1
-    stories: List = []
+    # stories: List = [] # not found in fbsearch_suggested_profiles
 
 
-class Usertag(BaseModel):
+class Usertag(TypesBaseModel):
     user: UserShort
     x: float
     y: float
 
 
-class Location(BaseModel):
+class Location(TypesBaseModel):
     pk: Optional[int] = None
     name: str
     phone: Optional[str] = ""
@@ -127,8 +148,8 @@ class Location(BaseModel):
     # directory: Optional[dict] = {}
 
 
-class Media(BaseModel):
-    pk: str | int
+class Media(TypesBaseModel):
+    pk: Union[str, int]
     id: str
     code: str
     taken_at: datetime
@@ -156,7 +177,7 @@ class Media(BaseModel):
     clips_metadata: dict = {}
 
 
-class MediaXma(BaseModel):
+class MediaXma(TypesBaseModel):
     # media_type: int
     video_url: HttpUrl  # for Video and IGTV
     title: Optional[str] = ""
@@ -169,7 +190,7 @@ class MediaXma(BaseModel):
     preview_media_fbid: Optional[str] = None
 
 
-class MediaOembed(BaseModel):
+class MediaOembed(TypesBaseModel):
     title: str
     author_name: str
     author_url: str
@@ -187,14 +208,14 @@ class MediaOembed(BaseModel):
     can_view: bool
 
 
-class Collection(BaseModel):
+class Collection(TypesBaseModel):
     id: str
     name: str
     type: str
     media_count: int
 
 
-class Comment(BaseModel):
+class Comment(TypesBaseModel):
     pk: str
     text: str
     user: UserShort
@@ -206,22 +227,23 @@ class Comment(BaseModel):
     like_count: Optional[int] = None
 
 
-class Hashtag(BaseModel):
+class Hashtag(TypesBaseModel):
     id: str
     name: str
     media_count: Optional[int] = None
     profile_pic_url: Optional[HttpUrl] = None
 
 
-class StoryMention(BaseModel):
+class StoryMention(TypesBaseModel):
     user: UserShort
     x: Optional[float] = None
     y: Optional[float] = None
     width: Optional[float] = None
     height: Optional[float] = None
+    rotation: Optional[float] = None
 
 
-class StoryMedia(BaseModel):
+class StoryMedia(TypesBaseModel):
     # Instagram does not return the feed_media object when requesting story,
     # so you will have to make an additional request to get media and this is overhead:
     # media: Media
@@ -241,30 +263,32 @@ class StoryMedia(BaseModel):
     media_code: Optional[str] = None
 
 
-class StoryHashtag(BaseModel):
+class StoryHashtag(TypesBaseModel):
     hashtag: Hashtag
     x: Optional[float] = None
     y: Optional[float] = None
     width: Optional[float] = None
     height: Optional[float] = None
+    rotation: Optional[float] = None
 
 
-class StoryLocation(BaseModel):
+class StoryLocation(TypesBaseModel):
     location: Location
     x: Optional[float] = None
     y: Optional[float] = None
     width: Optional[float] = None
     height: Optional[float] = None
+    rotation: Optional[float] = None
 
 
-class StoryStickerLink(BaseModel):
+class StoryStickerLink(TypesBaseModel):
     url: HttpUrl
     link_title: Optional[str] = None
     link_type: Optional[str] = None
     display_url: Optional[str] = None
 
 
-class StorySticker(BaseModel):
+class StorySticker(TypesBaseModel):
     id: Optional[str] = None
     type: Optional[str] = "gif"
     x: float
@@ -277,14 +301,14 @@ class StorySticker(BaseModel):
     extra: Optional[dict] = {}
 
 
-class StoryBuild(BaseModel):
+class StoryBuild(TypesBaseModel):
     mentions: List[StoryMention]
     path: FilePath
     paths: List[FilePath] = []
     stickers: List[StorySticker] = []
 
 
-class StoryLink(BaseModel):
+class StoryLink(TypesBaseModel):
     webUri: HttpUrl
     x: float = 0.5126011
     y: float = 0.5168225
@@ -294,11 +318,12 @@ class StoryLink(BaseModel):
     rotation: float = 0.0
 
 
-class Story(BaseModel):
+class Story(TypesBaseModel):
     pk: str
     id: str
     code: str
     taken_at: datetime
+    imported_taken_at: Optional[datetime] = None
     media_type: int
     product_type: Optional[str] = ""
     thumbnail_url: Optional[HttpUrl] = None
@@ -306,6 +331,7 @@ class Story(BaseModel):
     video_url: Optional[HttpUrl] = None  # for Video and IGTV
     video_duration: Optional[float] = 0.0  # for Video and IGTV
     sponsor_tags: List[UserShort]
+    is_paid_partnership: Optional[bool] = False
     mentions: List[StoryMention]
     links: List[StoryLink]
     hashtags: List[StoryHashtag]
@@ -314,7 +340,7 @@ class Story(BaseModel):
     medias: List[StoryMedia] = []
 
 
-class Guide(BaseModel):
+class Guide(TypesBaseModel):
     id: Optional[str] = None
     title: Optional[str] = None
     description: str
@@ -322,7 +348,7 @@ class Guide(BaseModel):
     feedback_item: Optional[dict] = None
 
 
-class DirectMedia(BaseModel):
+class DirectMedia(TypesBaseModel):
     id: str
     media_type: int
     user: Optional[UserShort] = None
@@ -331,7 +357,7 @@ class DirectMedia(BaseModel):
     audio_url: Optional[HttpUrl] = None
 
 
-class ReplyMessage(BaseModel):
+class ReplyMessage(TypesBaseModel):
     id: str
     user_id: Optional[str] = None
     timestamp: datetime
@@ -352,7 +378,7 @@ class ReplyMessage(BaseModel):
     placeholder: Optional[dict] = None
 
 
-class DirectMessage(BaseModel):
+class DirectMessage(TypesBaseModel):
     id: str  # e.g. 28597946203914980615241927545176064
     user_id: Optional[str] = None
     thread_id: Optional[int] = None  # e.g. 340282366841710300949128531777654287254
@@ -374,15 +400,16 @@ class DirectMessage(BaseModel):
     xma_share: Optional[MediaXma] = None
     clip: Optional[Media] = None
     placeholder: Optional[dict] = None
+    client_context: Optional[str] = None
 
 
-class DirectResponse(BaseModel):
+class DirectResponse(TypesBaseModel):
     unseen_count: Optional[int] = None
     unseen_count_ts: Optional[int] = None
     status: Optional[str] = None
 
 
-class DirectShortThread(BaseModel):
+class DirectShortThread(TypesBaseModel):
     id: str
     users: List[UserShort]
     named: bool
@@ -393,7 +420,7 @@ class DirectShortThread(BaseModel):
     is_group: bool
 
 
-class DirectThread(BaseModel):
+class DirectThread(TypesBaseModel):
     pk: str  # thread_v2_id, e.g. 17898572618026348
     id: str  # thread_id, e.g. 340282366841510300949128268610842297468
     messages: List[DirectMessage]
@@ -437,7 +464,7 @@ class DirectThread(BaseModel):
         return not any(timestamps)
 
 
-class Relationship(BaseModel):
+class Relationship(TypesBaseModel):
     user_id: str
     blocking: bool
     followed_by: bool
@@ -452,7 +479,7 @@ class Relationship(BaseModel):
     outgoing_request: bool
 
 
-class RelationshipShort(BaseModel):
+class RelationshipShort(TypesBaseModel):
     user_id: str
     following: bool
     incoming_request: bool
@@ -463,7 +490,7 @@ class RelationshipShort(BaseModel):
     outgoing_request: bool
 
 
-class Highlight(BaseModel):
+class Highlight(TypesBaseModel):
     pk: str  # 17895485401104052
     id: str  # highlight:17895485401104052
     latest_reel_media: int
@@ -477,12 +504,12 @@ class Highlight(BaseModel):
     items: List[Story] = []
 
 
-class Share(BaseModel):
+class Share(TypesBaseModel):
     pk: str
     type: str
 
 
-class Track(BaseModel):
+class Track(TypesBaseModel):
     id: str
     title: str
     subtitle: str
@@ -506,7 +533,7 @@ class Track(BaseModel):
     territory_validity_periods: dict
 
 
-class Note(BaseModel):
+class Note(TypesBaseModel):
     id: str
     text: str
     user_id: str

@@ -13,7 +13,6 @@ from instagrapi.extractors import extract_user_gql, extract_user_short, extract_
 from instagrapi.types import Relationship, RelationshipShort, User, UserShort
 from instagrapi.utils import json_value
 
-
 MAX_USER_COUNT = 200
 
 
@@ -594,7 +593,7 @@ class UserMixin:
         self, user_id: str, use_cache: bool = True, amount: int = 0
     ) -> Dict[str, UserShort]:
         """
-        Get user's followers information
+        Get user's following information
 
         Parameters
         ----------
