@@ -3,11 +3,11 @@
 # This software is released under the MIT License.
 # https://opensource.org/licenses/MIT
 
-import os
 import io
+import os
 import re
-import tempfile
 import shutil
+import tempfile
 
 try:
     from PIL import Image
@@ -128,7 +128,7 @@ def prepare_image(
     """
     min_size = kwargs.pop("min_size", (320, 167))
     if is_remote(img):
-        res = requests.get(img)
+        res = requests.get(img, timeout=5)
         im = Image.open(io.BytesIO(res.content))
     else:
         im = Image.open(img)
@@ -189,8 +189,8 @@ def prepare_video(
          choose ultrafast when you are in a hurry and file size does not matter.
     :return:
     """
+    from moviepy.video.fx.all import crop, resize
     from moviepy.video.io.VideoFileClip import VideoFileClip
-    from moviepy.video.fx.all import resize, crop
 
     min_size = kwargs.pop("min_size", (612, 320))
     progress_bar = True if kwargs.pop("progress_bar", None) else False
@@ -210,7 +210,7 @@ def prepare_video(
 
     if is_remote(vid):
         # Download remote file
-        res = requests.get(vid)
+        res = requests.get(vid, timeout=5)
         temp_video_file.write(res.content)
         video_src_filename = temp_video_file.name
     else:
